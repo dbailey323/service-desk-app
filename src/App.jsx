@@ -92,7 +92,7 @@ const callAI = async (prompt) => {
         "X-Title": "Service Desk Manager",
       },
       body: JSON.stringify({
-        "model": "google/gemini-flash-1.5", // You can change this to 'anthropic/claude-3.5-sonnet' or 'openai/gpt-4o-mini'
+        "model": "openai/gpt-3.5-turbo", // You can change this to 'anthropic/claude-3.5-sonnet' or 'openai/gpt-4o-mini'
         "messages": [
           {"role": "user", "content": prompt}
         ]
