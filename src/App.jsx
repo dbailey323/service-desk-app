@@ -52,12 +52,12 @@ class ErrorBoundary extends Component {
 let app, auth, db;
 try {
   const firebaseConfig = {
-    apiKey: "AIzaSyCWA2cHOqph0lJRjgYIQeRKnIJGsB_WW8Y",
-  authDomain: "service-desk-app-a2f56.firebaseapp.com",
-  projectId: "service-desk-app-a2f56",
-  storageBucket: "service-desk-app-a2f56.firebasestorage.app",
-  messagingSenderId: "716584978528",
-  appId: "1:716584978528:web:36a810a12bcb9fd283db05"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID
   };
   
   if (firebaseConfig.apiKey) {
