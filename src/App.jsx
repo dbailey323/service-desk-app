@@ -26,6 +26,13 @@ const COMPANY_THEME = {
   logoText: 'Service Desk'
 };
 
+// --- HELPER: Safe Render Value (Prevents Object Crash) ---
+const renderValue = (val) => {
+  if (val === null || val === undefined) return 0;
+  if (typeof val === 'object') return 0; 
+  return val;
+};
+
 // --- ERROR BOUNDARY ---
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
@@ -68,24 +75,42 @@ try {
 } catch (e) { console.error("Firebase Init Error:", e); }
 
 const appId = 'default-app-id';
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
+// Changed from VITE_GEMINI_API_KEY to VITE_OPENROUTER_API_KEY
+const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY || ""; 
 
-// --- GEMINI API ---
-const callGemini = async (prompt) => {
-  if (!apiKey) return "AI Key missing. Please add VITE_GEMINI_API_KEY to .env.local";
+// --- OPENROUTER API (Replaces Gemini) ---
+const callAI = async (prompt) => {
+  if (!apiKey) return "AI Key missing. Please add VITE_OPENROUTER_API_KEY to .env.local";
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      }
-    );
-    if (!response.ok) throw new Error(`Gemini API Error: ${response.status}`);
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        // Optional: Helps OpenRouter identify your app
+        "HTTP-Referer": window.location.href, 
+        "X-Title": "Service Desk Manager",
+      },
+      body: JSON.stringify({
+        "model": "google/gemini-flash-1.5", // You can change this to 'anthropic/claude-3.5-sonnet' or 'openai/gpt-4o-mini'
+        "messages": [
+          {"role": "user", "content": prompt}
+        ]
+      })
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        console.error("OpenRouter Error:", err);
+        throw new Error(err.error?.message || `API Error: ${response.status}`);
+    }
+
     const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Could not generate response.";
-  } catch (error) { return "Error connecting to AI Assistant."; }
+    return data.choices[0]?.message?.content || "Could not generate response.";
+  } catch (error) { 
+    console.error("AI Connection Error:", error);
+    return "Error connecting to AI Assistant."; 
+  }
 };
 
 // --- CSV PARSER HELPER ---
@@ -136,7 +161,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, isDarkMode }) => (
       </div>
     </div>
     <div>
-      <h3 className={`${isDarkMode ? 'text-white' : 'text-slate-800'} text-2xl font-bold`}>{value}</h3>
+      <h3 className={`${isDarkMode ? 'text-white' : 'text-slate-800'} text-2xl font-bold`}>{renderValue(value)}</h3>
       <p className={`${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-sm font-medium`}>{title}</p>
       {subtext && <p className={`${isDarkMode ? 'text-slate-500' : 'text-slate-400'} text-xs mt-1`}>{subtext}</p>}
     </div>
@@ -159,7 +184,7 @@ const LeaderboardRow = ({ rank, name, value, subLabel, type, isDarkMode }) => {
         <span className={`font-medium text-sm ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>{name}</span>
       </div>
       <div className="text-right">
-        <span className="font-bold" style={{ color: type === 'csat' ? '#16a34a' : COMPANY_THEME.accent }}>{value}</span>
+        <span className="font-bold" style={{ color: type === 'csat' ? '#16a34a' : COMPANY_THEME.accent }}>{renderValue(value)}</span>
         <span className={`text-xs block ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{subLabel}</span>
       </div>
     </div>
@@ -293,8 +318,8 @@ function ServiceDeskLogic() {
           const nameIndex = headers.findIndex(h => h === 'agent name');
           const answeredIndex = headers.findIndex(h => h === 'answered');
           const ahtIndex = headers.findIndex(h => h === 'avg handle');
-          const holdIndex = headers.findIndex(h => h === 'avg hold'); // New
-          const transferIndex = headers.findIndex(h => h === 'transferred'); // New
+          const holdIndex = headers.findIndex(h => h === 'avg hold'); 
+          const transferIndex = headers.findIndex(h => h === 'transferred'); 
 
           for (let i = 1; i < rows.length; i++) {
             const cols = rows[i];
@@ -308,10 +333,10 @@ function ServiceDeskLogic() {
             const rawAht = parseFloat(cols[ahtIndex]) || 0;
             const ahtSeconds = rawAht > 10000 ? Math.round(rawAht / 1000) : Math.round(rawAht);
             
-            const rawHold = parseFloat(cols[holdIndex]) || 0; // New
-            const holdSeconds = rawHold > 10000 ? Math.round(rawHold / 1000) : Math.round(rawHold); // Normalize ms to s if needed
+            const rawHold = parseFloat(cols[holdIndex]) || 0; 
+            const holdSeconds = rawHold > 10000 ? Math.round(rawHold / 1000) : Math.round(rawHold); 
             
-            const transfers = parseInt(cols[transferIndex]) || 0; // New
+            const transfers = parseInt(cols[transferIndex]) || 0; 
 
             if (!agentStatsMap[name]) agentStatsMap[name] = {};
             agentStatsMap[name].answered = answered;
@@ -332,8 +357,8 @@ function ServiceDeskLogic() {
             if (stats.breached !== undefined) updateData.slaBreach = stats.breached;
             if (stats.answered !== undefined) updateData.callsAnswered = stats.answered; 
             if (stats.aht !== undefined) updateData.aht = stats.aht;
-            if (stats.hold !== undefined) updateData.avgHold = stats.hold; // New field
-            if (stats.transfers !== undefined) updateData.transfers = stats.transfers; // New field
+            if (stats.hold !== undefined) updateData.avgHold = stats.hold;
+            if (stats.transfers !== undefined) updateData.transfers = stats.transfers;
 
             batch.set(statsRef, updateData, { merge: true });
             updateCount++;
@@ -390,16 +415,21 @@ function ServiceDeskLogic() {
     return { topCsat: [...ranked].sort((a, b) => b.csat - a.csat).filter(a => a.csat > 0).slice(0, 3), topAht: [...ranked].filter(a => a.aht > 0).sort((a, b) => a.aht - b.aht).slice(0, 3) };
   }, [agents, allStats]);
 
+  // --- UPDATED AI FUNCTION (Uses OpenRouter) ---
   const generateAiFeedback = async () => {
     if (!selectedAgent) return; setIsGeneratingAi(true);
     const s = allStats[selectedAgent.id] || { incidentsResolved: 0, csat: 0, aht: 0 };
-    const feedback = await callGemini(`Analyze agent ${selectedAgent.name} (${selectedAgent.role}). Stats: CSAT ${s.csat}, AHT ${s.aht}s, Incidents ${s.incidentsResolved}. Write a concise coaching plan.`);
+    
+    // Use generic "callAI" now
+    const feedback = await callAI(`Analyze agent ${selectedAgent.name} (${selectedAgent.role}). Stats: CSAT ${s.csat}, AHT ${s.aht}s, Incidents ${s.incidentsResolved}. Write a concise coaching plan.`);
+    
     setNewNote(prev => prev ? prev + '\n\n' + feedback : feedback); setIsGeneratingAi(false);
   };
 
   const generateWeeklyReport = async () => {
     setIsReportGenerating(true);
-    const aiReport = await callGemini(`Write a Weekly Service Desk Summary. SLA: ${dashboardStats.sla}. AHT: ${dashboardStats.aht}. Team Size: ${agents.length}. Top Performers: ${leaderboardData.topCsat[0]?.name}.`);
+    // Use generic "callAI" now
+    const aiReport = await callAI(`Write a Weekly Service Desk Summary. SLA: ${dashboardStats.sla}. AHT: ${dashboardStats.aht}. Team Size: ${agents.length}. Top Performers: ${leaderboardData.topCsat[0]?.name}.`);
     setReportText(aiReport); setIsReportGenerating(false); setIsReportModalOpen(true);
   };
 
@@ -565,7 +595,7 @@ function ServiceDeskLogic() {
                         {['incidentsResolved', 'callsAnswered', 'aht', 'slaBreach', 'avgHold', 'transfers'].map(key => {
                            const valObject = (allStats[selectedAgent.id] || {})[key];
                            // GUARD: Check type to prevent crash
-                           const val = typeof valObject === 'number' ? valObject : 0;
+                           const val = renderValue(valObject);
                            
                            let label = key.toUpperCase();
                            if (key === 'incidentsResolved') label = 'Incidents';
