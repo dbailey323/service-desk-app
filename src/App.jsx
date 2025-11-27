@@ -362,15 +362,15 @@ function ServiceDeskLogic() {
     
     if (count === 0) return { sla: '0%', totalIncidents: 0, totalBreaches: 0, totalCalls: 0, aht: '0s', rawAht: 0, rawCsat: 0 };
 
-    const totalBreaches = vals.reduce((a, c) => a + (parseInt(c.slaBreach) || 0), 0);
-    const totalIncidents = vals.reduce((a, c) => a + (parseInt(c.incidentsResolved) || 0), 0);
-    const totalCalls = vals.reduce((a, c) => a + (parseInt(c.callsAnswered) || 0), 0); 
+    const totalBreaches = vals.reduce((a, c) => a + (typeof c.slaBreach === 'number' ? c.slaBreach : 0), 0);
+    const totalIncidents = vals.reduce((a, c) => a + (typeof c.incidentsResolved === 'number' ? c.incidentsResolved : 0), 0);
+    const totalCalls = vals.reduce((a, c) => a + (typeof c.callsAnswered === 'number' ? c.callsAnswered : 0), 0); 
     
-    const agentsWithAht = vals.filter(c => (parseInt(c.aht) || 0) > 0);
-    const totalAhtSum = agentsWithAht.reduce((a, c) => a + (parseInt(c.aht) || 0), 0);
+    const agentsWithAht = vals.filter(c => (typeof c.aht === 'number' ? c.aht : 0) > 0);
+    const totalAhtSum = agentsWithAht.reduce((a, c) => a + (typeof c.aht === 'number' ? c.aht : 0), 0);
     const avgAht = agentsWithAht.length > 0 ? Math.round(totalAhtSum / agentsWithAht.length) : 0;
 
-    const totalCsat = vals.reduce((a, c) => a + (parseFloat(c.csat) || 0), 0);
+    const totalCsat = vals.reduce((a, c) => a + (typeof c.csat === 'number' ? c.csat : 0), 0);
     const avgCsat = (totalCsat / count).toFixed(1);
 
     const slaPerf = totalIncidents > 0 ? ((1 - (totalBreaches / totalIncidents)) * 100).toFixed(1) + '%' : '100%';
@@ -379,7 +379,14 @@ function ServiceDeskLogic() {
   }, [allStats]);
 
   const leaderboardData = useMemo(() => {
-    const ranked = agents.map(a => { const s = allStats[a.id] || { csat: 0, aht: 9999 }; return { ...a, csat: parseFloat(s.csat) || 0, aht: parseInt(s.aht) || 0 }; });
+    const ranked = agents.map(a => { 
+        const s = allStats[a.id] || { csat: 0, aht: 9999 }; 
+        return { 
+            ...a, 
+            csat: typeof s.csat === 'number' ? s.csat : 0, 
+            aht: typeof s.aht === 'number' ? s.aht : 0 
+        }; 
+    });
     return { topCsat: [...ranked].sort((a, b) => b.csat - a.csat).filter(a => a.csat > 0).slice(0, 3), topAht: [...ranked].filter(a => a.aht > 0).sort((a, b) => a.aht - b.aht).slice(0, 3) };
   }, [agents, allStats]);
 
@@ -500,17 +507,21 @@ function ServiceDeskLogic() {
                             ) : (
                                 agents.map(agent => {
                                     const s = allStats[agent.id] || { incidentsResolved: 0, slaBreach: 0 };
+                                    // GUARD: Ensure these are numbers, default to 0 if they are objects/undefined
+                                    const incidents = typeof s.incidentsResolved === 'number' ? s.incidentsResolved : 0;
+                                    const breaches = typeof s.slaBreach === 'number' ? s.slaBreach : 0;
+                                    
                                     return (
                                         <tr key={agent.id} className={`border-b last:border-0 ${isDarkMode ? 'border-slate-700 hover:bg-slate-700/50' : 'border-slate-100 hover:bg-slate-50'}`}>
                                             <td className={`px-6 py-4 font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>{agent.name}</td>
-                                            <td className={`px-6 py-4 text-center ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{s.incidentsResolved}</td>
-                                            <td className={`px-6 py-4 text-center font-bold ${s.slaBreach > 0 ? 'text-red-500' : (isDarkMode ? 'text-slate-500' : 'text-slate-300')}`}>
-                                                {s.slaBreach > 0 ? s.slaBreach : '-'}
+                                            <td className={`px-6 py-4 text-center ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{incidents}</td>
+                                            <td className={`px-6 py-4 text-center font-bold ${breaches > 0 ? 'text-red-500' : (isDarkMode ? 'text-slate-500' : 'text-slate-300')}`}>
+                                                {breaches > 0 ? breaches : '-'}
                                             </td>
                                             <td className="px-6 py-4 text-center">
-                                                {s.slaBreach === 0 && s.incidentsResolved > 0 ? (
+                                                {breaches === 0 && incidents > 0 ? (
                                                     <span className="px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">On Track</span>
-                                                ) : s.slaBreach > 0 ? (
+                                                ) : breaches > 0 ? (
                                                     <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">Attention</span>
                                                 ) : (
                                                     <span className="opacity-50">-</span>
@@ -540,24 +551,27 @@ function ServiceDeskLogic() {
                       <div className="flex justify-between items-center mb-4"><h2 className={`text-lg md:text-xl font-bold hidden md:block ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{selectedAgent.name}</h2><button onClick={() => { 
                         const s = allStats[selectedAgent.id] || {};
                         setEditingStats({
-                          incidentsResolved: s.incidentsResolved || 0,
-                          callsAnswered: s.callsAnswered || 0,
-                          aht: s.aht || 0,
-                          slaBreach: s.slaBreach || 0,
-                          avgHold: s.avgHold || 0,
-                          transfers: s.transfers || 0
+                          incidentsResolved: typeof s.incidentsResolved === 'number' ? s.incidentsResolved : 0,
+                          callsAnswered: typeof s.callsAnswered === 'number' ? s.callsAnswered : 0,
+                          aht: typeof s.aht === 'number' ? s.aht : 0,
+                          slaBreach: typeof s.slaBreach === 'number' ? s.slaBreach : 0,
+                          avgHold: typeof s.avgHold === 'number' ? s.avgHold : 0,
+                          transfers: typeof s.transfers === 'number' ? s.transfers : 0
                         }); 
                         setIsStatsModalOpen(true); 
                       }} className="flex items-center gap-2 px-3 py-1 text-xs font-bold rounded-lg text-white" style={{ backgroundColor: COMPANY_THEME.accent }}><Edit2 size={12} /> Edit Stats</button></div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
                         {/* Explicitly render known number fields to avoid crashing on timestamps */}
                         {['incidentsResolved', 'callsAnswered', 'aht', 'slaBreach', 'avgHold', 'transfers'].map(key => {
-                           const val = (allStats[selectedAgent.id] || {})[key] || 0;
+                           const valObject = (allStats[selectedAgent.id] || {})[key];
+                           // GUARD: Check type to prevent crash
+                           const val = typeof valObject === 'number' ? valObject : 0;
+                           
                            let label = key.toUpperCase();
                            if (key === 'incidentsResolved') label = 'Incidents';
                            if (key === 'slaBreach') label = 'Breaches';
                            if (key === 'callsAnswered') label = 'Calls Taken';
-                           if (key === 'avgHold') label = 'Hold Time';
+                           if (key === 'avgHold') label = 'Hold Time (s)';
                            if (key === 'transfers') label = 'Transfers';
                            
                            return (
